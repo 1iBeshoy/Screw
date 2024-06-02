@@ -2,12 +2,12 @@ const { Schema, model } = require("mongoose");
 
 const move = new Schema({
     card: {
-        type: Object,
+        type: Number,
         required: true
     },
     type: {
         type: String,
-        enum: ['take', 'throw'],
+        enum: ['draw', 'take', 'throw'],
         required: true
     },
     location: { // to/from
@@ -42,7 +42,7 @@ const round = new Schema({
         default: []
     },
     usedCards: {
-        type: [Object],
+        type: [Number],
         default: null
     },
     currentPlayerIndex: {
@@ -54,8 +54,12 @@ const round = new Schema({
         default: -1
     },
     winner: {
-        type: [Object],
+        type: [String],
         default: []
+    },
+    active: {
+        type: Boolean,
+        required: true
     }
 })
 
@@ -89,7 +93,7 @@ const player = new Schema({
         required: true
     },
     cards: {
-        type: [Object],
+        type: [Number],
         default: []
     },
     ready: {
@@ -103,7 +107,7 @@ const player = new Schema({
 
 const availableCards = new Schema({
     cards: {
-        type: [Object],
+        type: [Number],
         required: true
     },
     shuffle: {
@@ -122,17 +126,32 @@ const gameSchema = new Schema({
         required: true,
         unique: true
     },
-    players: [player],
-    status: [status],
+    players: {
+        type: [player],
+        default: []
+    },
+    status: {
+        type: [status],
+        default: []
+    },
+    rounds: {
+        type: [round],
+        default: []
+    },
+    numberOfRounds: {
+        type: Number,
+        default: 4
+    },
     maxMoveTime: {
         type: Number,
         default: -1
     },
     maxPlayers: {
-        type: Number
+        type: Number,
+        default: 14
     },
     winner: {
-        type: [Object],
+        type: [String],
         default: []
     },
     dbVersion: {

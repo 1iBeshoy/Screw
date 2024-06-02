@@ -2,25 +2,27 @@ const { PlayerRepository } = require("../Repositories/PlayerRepository");
 const { GameRepository } = require("../Repositories/GameRepository");
 const { generateID } = require("../Utils/ID")
 const bcrypt = require("bcrypt");
+const moment = require("moment");
 
 class PlayerService {
     constructor(ID) {
-        this.ID;
+        this.ID = ID;
         this.player = null;
     }
 
-    async isExits(playerID) {
-        let player = await PlayerRepository.getPlayerData(playerID);
+    async isExists() {
+        let player = await PlayerRepository.getPlayerData(this.ID);
 
-        if(!player) {
-            return false;
-        }
+        if(!player) return false;
 
         this.player = player;
         return true;
     }
 
     async createPlayer(name, email, password) {
+        let duplicatedEmail = await PlayerRepository.getPlayerData(null, email);
+        if(duplicatedEmail) throw new Error("Player with that email already exists!");
+        
         let ID = generateID();
         while(true) {
             let duplicatedID = await PlayerRepository.getPlayerData(ID);

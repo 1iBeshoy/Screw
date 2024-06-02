@@ -7,6 +7,4 @@ async function connect() {
     .catch((error) => console.log("Error While Connecting To the Database.", error));
 }
 
-const {PlayerService} = require("./Services/PlayerService");
-
 connect();

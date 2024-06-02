@@ -1,5 +1,5 @@
 const { Player } = require("./models/Player");
-const { CustomError } = require("../Utils/Error");
+const { DeveloperError } = require("../Utils/DeveloperError");
 
 class PlayerRepository {
     static async setPlayerData(playerData) {
@@ -7,31 +7,35 @@ class PlayerRepository {
             let player = await this.getPlayerData(playerData.ID);
     
             if(player) {
-                await player.updateOne(playerData).catch((error) => { throw new CustomError("error while updating player data", error, "Repositories/PlayerRepository.js", "setPlayerData", 10) });
+                await player.updateOne(playerData).catch((error) => { throw new DeveloperError("error while updating player data", error, "Repositories/PlayerRepository.js", "setPlayerData", 10) });
             } else {
-                await Player.create(playerData).catch((error) => { throw new CustomError("error while creating new player", error, "Repositories/PlayerRepository.js", "setPlayerData", 12) });
+                await Player.create(playerData).catch((error) => { throw new DeveloperError("error while creating new player", error, "Repositories/PlayerRepository.js", "setPlayerData", 12) });
             }
 
             return player;
         } catch(error) {
-            if(!(error instanceof CustomError)) {
-                new CustomError("unknown error", error, "Repositories/PlayerRepository.js", "setPlayerData", 5);
+            if(!(error instanceof DeveloperError)) {
+                new DeveloperError("unknown error", error, "Repositories/PlayerRepository.js", "setPlayerData", 5);
             }
 
             return false;
         }
     }
 
-    static async getPlayerData(playerID) {
+    static async getPlayerData(playerID = null, email = null) {
         try {
-            let player = await Player.findOne({ ID: playerID }).catch((error) => { throw new CustomError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 27) });;
+            let filter = {};
+            if(playerID) filter.ID = playerID;
+            if(email) filter.email = email;
+
+            let player = await Player.findOne(filter).catch((error) => { throw new DeveloperError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 31) });;
 
             if(!player) return null;
 
             return player;
         } catch(error) {
-            if(!(error instanceof CustomError)) {
-                new CustomError("unknown error", error, "Repositories/PlayerRepository.js", "getPlayerData", 25);
+            if(!(error instanceof DeveloperError)) {
+                new DeveloperError("unknown error", error, "Repositories/PlayerRepository.js", "getPlayerData", 25);
             }
 
             return false;
@@ -40,11 +44,11 @@ class PlayerRepository {
 
     static async getAllPlayers(filter = {}, projection= null, options = {}) {
         try {
-            let result = await Player.find(filter, projection, options).catch((error) => { throw new CustomError("error while getting players data", error, "Repositories/PlayerRepository.js", "getAllPlayers", 43) });;
+            let result = await Player.find(filter, projection, options).catch((error) => { throw new DeveloperError("error while getting players data", error, "Repositories/PlayerRepository.js", "getAllPlayers", 47) });;
             return result;
         } catch(error) {
-            if(!(error instanceof CustomError)) {
-                new CustomError("unknown error", error, "Repositories/PlayerRepository.js", "getAllPlayers", 41);
+            if(!(error instanceof DeveloperError)) {
+                new DeveloperError("unknown error", error, "Repositories/PlayerRepository.js", "getAllPlayers", 45);
             }
 
             return false;

@@ -1,4 +1,4 @@
-class CustomError extends Error {
+class DeveloperError extends Error {
     constructor(name, message, file, functionName, lineOfCode) {
         super(message);
         this.name = name;
@@ -15,4 +15,4 @@ class CustomError extends Error {
     }
 }
 
-module.exports = { CustomError };
+module.exports = { DeveloperError };

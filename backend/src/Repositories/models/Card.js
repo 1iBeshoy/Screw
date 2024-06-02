@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const cards = new mongoose.Schema({
-    id: {
+    ID: {
         type: Number,
         required: true
     },
@@ -28,6 +28,10 @@ const cards = new mongoose.Schema({
     gameVersion: {
         type: Number,
         required: true
+    },
+    deleted: {
+        type: Boolean,
+        default: false
     },
     dbVersion: {
         type: Number,
