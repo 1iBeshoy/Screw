@@ -7,12 +7,12 @@ const move = new Schema({
     },
     type: {
         type: String,
-        enum: ['draw', 'take', 'throw'],
+        enum: ['draw', 'take', 'throw', 'skip'],
         required: true
     },
     location: { // to/from
         type: String,
-        enum: ['deck', 'floor', 'player'],
+        enum: ['deck', 'floor', 'player', 'system'],
         required: true
     },
     locPlayer: {
@@ -38,7 +38,7 @@ const round = new Schema({
         default: []
     },
     availableCards: {
-        type: [availableCards],
+        type: [Number],
         default: []
     },
     usedCards: {
@@ -102,21 +102,6 @@ const player = new Schema({
     },
     score: {
         type: Number,
-    }
-})
-
-const availableCards = new Schema({
-    cards: {
-        type: [Number],
-        required: true
-    },
-    shuffle: {
-        type: Number,
-        required: true
-    },
-    active: {
-        type: Boolean,
-        required: true
     }
 })
 

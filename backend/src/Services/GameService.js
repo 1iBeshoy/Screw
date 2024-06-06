@@ -100,11 +100,7 @@ class GameService {
 
         this.game.rounds.push({
             number: roundNumber,
-            availableCards: [{
-                cards: gameDeck.map(card => card.ID),
-                shuffle: 1,
-                active: true
-            }],
+            availableCards: [gameDeck.map(card => card.ID)],
             usedCards: [CardService.drawCard(gameDeck)?.ID],
             currentPlayerIndex: Math.round(Math.random() * (this.game.players.length)) - 1,
             active: true
@@ -172,7 +168,7 @@ class GameService {
         currentGameStatus.active = false;
         this.game.status.push({
             type: "ended",
-            by: winners.map(winner => winner.ID).join(','),
+            by: winners.join(','),
             date: moment.now(),
             active: true
         });
@@ -182,13 +178,72 @@ class GameService {
         return this;
     }
 
+    async handleTurnTimeout() {
+        const currentRound = this.getCurrentRound();
+        currentRound.moves.push({
+            card: -1,
+            type: 'skip',
+            location: 'player',
+            by: 'system',
+            date: moment.now()
+        });
+        currentRound.currentPlayerIndex = (currentRound.currentPlayerIndex + 1) % this.game.players.length;
+        
+        this.startPlayerTurnTimer();
+    }
+
+    async resetPlayerTurnTimer() {
+        if (this.turnTimeout) {
+            clearTimeout(this.turnTimeout);
+            this.turnTimeout = null;
+        }
+
+        currentRound.currentPlayerIndex = (currentRound.currentPlayerIndex + 1) % this.game.players.length;
+        
+        this.startPlayerTurnTimer();
+    }
+
+    async startPlayerTurnTimer() {
+        if (this.turnTimeout) clearTimeout(this.turnTimeout);
+
+        const maxMoveTime = this.game.maxMoveTime;
+        if (maxMoveTime > 0) {
+            this.turnTimeout = setTimeout(async () => {
+                await this.handleTurnTimeout();
+            }, maxMoveTime);
+        }
+    }
+
+    async checkRoundStatusAndHandleTurn() {
+        const roundFinished = await this.isRoundFinished();
+        if (roundFinished) {
+            await this.endRound();
+        } else {
+            this.startPlayerTurnTimer();
+        }
+    }
+
+    async isRoundFinished() {
+        const currentRound = this.getCurrentRound();
+        if (!currentRound) throw new Error("No active round");
+    
+        if (currentRound.screwPlayerIndex !== -1 && currentRound.currentPlayerIndex === currentRound.screwPlayerIndex) {
+            return true;
+        }
+    
+        const noCardsLeft = this.game.players.some(player => player.cards.length === 0);
+        if (noCardsLeft) return true;
+        
+        return false;
+    }
+
     async drawCard(fromLocation, fromPlayer = null, fromPlayerCardIndex = null, byPlayer) {
-        validatePlayer(this.game.players, byPlayer.ID);
+        this.validatePlayer(this.game.players, byPlayer.ID);
         let drawnCard = null;
 
         switch (fromLocation) {
             case "deck":
-                drawnCard = CardService.drawCard(await this.getActiveDeck());
+                drawnCard = CardService.drawCard(await this.getAvailableCards());
                 break;
             case "floor":
                 drawnCard = this.game.floor.pop();
@@ -197,7 +252,7 @@ class GameService {
                 if (fromPlayerCardIndex <= -1 || fromPlayerCardIndex >= 4)
                     throw new Error("Trying to draw an invalid card!");
 
-                let gamePlayer = validatePlayer(this.game.players, fromPlayer.ID);
+                let gamePlayer = this.validatePlayer(this.game.players, fromPlayer.ID);
                 const gamePlayerCard = gamePlayer.cards[fromPlayerCardIndex];
 
                 if (gamePlayerCard === -1 || !gamePlayerCard)
@@ -211,31 +266,109 @@ class GameService {
         }
 
         this.game.moves.push({
-            card: drawnCard,
+            card: drawnCard.ID,
             type: "draw",
             location: fromLocation,
-            locPlayer: fromPlayer?.email ?? '',
-            by: byPlayer.email,
-            date: moment().toISOString()
+            locPlayer: fromPlayer?.ID ?? null,
+            by: byPlayer.ID,
+            date: moment.now()
         });
 
-        await GameRepository.saveGame(this.game);
-        return drawnCard;
+        return this;
     }
 
-    getCurrentRound() {
+    async throwCard(toLocation, thrownCard, toPlayer = null, toPlayerCardIndex = null, byPlayer) {
+        let byGamePlayer = this.validatePlayer(this.game.players, byPlayer.ID);
+        let byGamePlayerCard = this.validateCard(byGamePlayer.cards, thrownCard?.ID);
+
+        switch(toLocation) {
+            case "floor":
+                this.game.floor.push(byGamePlayerCard)
+                break;
+            case "player":
+                if(toPlayerCardIndex > 0 || toPlayerCardIndex <= 4)
+                    throw new Error("Invalid move!");
+
+                let gamePlayer = this.validatePlayer(this.game.players, toPlayer.ID);
+                const gamePlayerCard = gamePlayer.cards.at(toPlayerCardIndex);
+
+                if(gamePlayerCard !== -1)
+                    throw new Error("Invalid move!");
+
+                gamePlayer.cards[toPlayerCardIndex] = thrownCard;
+                break;
+            default:
+                throw new Error("Invalid move!");
+        }
+
+        this.game.moves.push({
+            card: thrownCard.ID,
+            type: "throw",
+            location: toLocation,
+            locPlayer: toPlayer?.ID  ?? '',
+            by: byPlayer.ID,
+            date: moment.now()
+        });
+
+        return this;
+    }
+
+    async takeCard(card, player, playerCardIndex, fromLoc, fromPlayer = null) {
+        const gamePlayer = this.validatePlayer(this.game.players, player.ID);
+        gamePlayer.cards[playerCardIndex] = card.ID;
+
+        this.game.moves.push({
+            card: card.ID,
+            type: "take",
+            location: fromLoc,
+            locPlayer: fromPlayer?.ID  ?? '',
+            by: player.ID,
+            date: moment.now()
+        });
+
+        return this;
+    }
+
+    async getCurrentRound() {
         return this.game.rounds.find(round => round.active);
     }
 
-    validateCard(deckToValidateFrom, cardID) {
-        if(CardService.getCardById(cardID) === null)
+    async getAvailableCards() {
+        let currentRound = await this.getCurrentRound();
+        if(!currentRound) throw new Error("No active round!");
+
+        let availableCards = currentRound.availableCards;
+
+        if(!availableCards || availableCards.length <= 0) {
+            if(currentRound.usedCards.length >= 2) {
+                let floor = currentRound.usedCards[currentRound.usedCards.length - 1];
+                let shuffledCards = CardService.shuffle(currentRound.usedCards.pop());
+
+                availableCards = shuffledCards;
+                currentRound.usedCards = [floor];
+
+                return shuffledCards;
+            }
+
+            const newDeck = CardService.createDeck();
+
+            currentRound.availableCards.push(newDeck.map(card => card.ID));
+
+            return newDeck;
+        }            
+
+        return availableCards;
+    }
+
+    validateCard(deckToValIDateFrom, cardID) {
+        if(CardService.getCardByID(cardID) === null)
             throw new Error("Invalid card!");
 
-        const cardIndex = deckToValidateFrom.findIndex(card => card.id === cardID);
+        const cardIndex = deckToValIDateFrom.findIndex(card => card.ID === cardID);
         if (cardIndex === -1)
             throw new Error("Invalid card!");
         
-        return deckToValidateFrom[cardIndex];
+        return deckToValIDateFrom[cardIndex];
     }
 
     validatePlayer(players, playerToFindID) {
