@@ -22,6 +22,9 @@ const move = new Schema({
         type: String,
         required: true
     },
+    frontendDate: {
+        type: Number
+    },
     date: {
         type: Number,
         required: true
@@ -72,6 +75,9 @@ const status = new Schema({
     by: {
         type: String,
         required: true
+    },
+    frontendDate: {
+        type: Number
     },
     date: { // the date in ms
         type: Number,

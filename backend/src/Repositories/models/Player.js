@@ -59,6 +59,31 @@ const stats = new mongoose.Schema({
     }
 })
 
+const log = new mongoose.Schema({
+    field: {
+        type: String,
+        enum: ['ID', 'name', 'email', 'password', 'guest', 'deleted']
+    },
+    oldValue: {
+        type: String
+    },
+    newValue: {
+        type: String
+    },
+    by: {
+        type: String
+    },
+    reason: {
+        type: String
+    },
+    frontendDate: {
+        type: Number
+    },
+    date: {
+        type: Number
+    }
+})
+
 const playerSchema = new mongoose.Schema({
     ID: {
         type: String,
@@ -71,10 +96,12 @@ const playerSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: true
     },
     password: {
         type: String,
+    },
+    guest: {
+        type: Boolean,
         required: true
     },
     games: {
@@ -91,6 +118,10 @@ const playerSchema = new mongoose.Schema({
     },
     overTimeStats: {
         type: [playerOverTimeStatsSchema],
+        default: []
+    },
+    log: {
+        type: [log],
         default: []
     },
     deleted: {

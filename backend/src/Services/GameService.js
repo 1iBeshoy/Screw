@@ -19,7 +19,7 @@ class GameService {
         return true;
     }
 
-    async create(host, numberOfRounds, maxMoveTime, maxPlayers) {
+    async create(host, numberOfRounds, maxMoveTime, maxPlayers, frontendDate = 0) {
         let code;
         while (true) {
             let game = await GameRepository.getGameData(code);
@@ -37,6 +37,7 @@ class GameService {
             status: [{
                 type: "waiting",
                 by: host.ID,
+                frontendDate,
                 date: moment.now(),
                 active: true
             }]
@@ -54,7 +55,7 @@ class GameService {
         return this;
     }
 
-    async start(host = null, checkReady = false) {
+    async start(host = null, checkReady = false, frontendDate = 0) {
         if(host && this.game.players[0].ID !== host.ID) throw new Error("Only the host can start the game!");
 
         const currentGameStatus = this.game.status.find(status => status.active);
@@ -73,6 +74,7 @@ class GameService {
         this.game.status.push({
             type: 'playing',
             by: host.ID,
+            frontendDate,
             date: moment.now(),
             active: true
         });
@@ -106,6 +108,8 @@ class GameService {
             active: true
         });
 
+        await this.startPlayerTurnTimer();
+
         return this;
     }
 
@@ -113,8 +117,8 @@ class GameService {
         const currentRound = this.getCurrentRound();
         if (!currentRound) throw new Error("No active round to end");
 
-        let leastScore = CardService.getPlayerScore(this.game.players[0]);
-        let winners = [this.game.players[0].ID];
+        let leastScore = Infinity;
+        let winners = [];
 
         this.game.players.forEach(player => {
             const playerScore = CardService.getPlayerScore(player);
@@ -127,18 +131,17 @@ class GameService {
             }
         });
 
-        for(player in this.game.players) {
-            if(winners.includes(player.ID)) continue;
-            const playerScore = CardService.getPlayerScore(player);
-            const playerTotalScore = player.score;
-            
-            player.score = (isNaN(playerScore) ? playerTotalScore + playerScore : playerScore);
-        }
+        this.game.players.forEach(player => {
+            if (!winners.includes(player.ID)) {
+                const playerScore = CardService.getPlayerScore(player);
+                player.score = (player.score || 0) + playerScore;
+            }
+        });
 
         currentRound.winner = winners.map(winner => winner.ID).join(',');
         currentRound.active = false;
 
-        if (currentRound.number === this.game.numberOfRounds) {
+        if (currentRound.number >= this.game.numberOfRounds) {
             await this.endGame();
         } else {
             await this.startNewRound();
@@ -147,7 +150,7 @@ class GameService {
         return this;
     }
 
-    async end() {
+    async end(frontendDate = 0) {
         const currentGameStatus = this.game.status.find(state => state.active);
         if (currentGameStatus.type !== "playing") throw new Error("Can't end this game!");
 
@@ -169,6 +172,7 @@ class GameService {
         this.game.status.push({
             type: "ended",
             by: winners.join(','),
+            frontendDate,
             date: moment.now(),
             active: true
         });
@@ -195,8 +199,9 @@ class GameService {
     async resetPlayerTurnTimer() {
         if (this.turnTimeout) {
             clearTimeout(this.turnTimeout);
-            this.turnTimeout = null;
         }
+
+        this.turnTimeout = null;
 
         currentRound.currentPlayerIndex = (currentRound.currentPlayerIndex + 1) % this.game.players.length;
         
@@ -219,7 +224,7 @@ class GameService {
         if (roundFinished) {
             await this.endRound();
         } else {
-            this.startPlayerTurnTimer();
+            await this.startPlayerTurnTimer();
         }
     }
 
@@ -237,7 +242,7 @@ class GameService {
         return false;
     }
 
-    async drawCard(fromLocation, fromPlayer = null, fromPlayerCardIndex = null, byPlayer) {
+    async drawCard(fromLocation, fromPlayer = null, fromPlayerCardIndex = null, byPlayer, frontendDate) {
         this.validatePlayer(this.game.players, byPlayer.ID);
         let drawnCard = null;
 
@@ -271,13 +276,14 @@ class GameService {
             location: fromLocation,
             locPlayer: fromPlayer?.ID ?? null,
             by: byPlayer.ID,
+            frontendDate,
             date: moment.now()
         });
 
         return this;
     }
 
-    async throwCard(toLocation, thrownCard, toPlayer = null, toPlayerCardIndex = null, byPlayer) {
+    async throwCard(toLocation, thrownCard, toPlayer = null, toPlayerCardIndex = null, byPlayer, frontendDate) {
         let byGamePlayer = this.validatePlayer(this.game.players, byPlayer.ID);
         let byGamePlayerCard = this.validateCard(byGamePlayer.cards, thrownCard?.ID);
 
@@ -307,13 +313,14 @@ class GameService {
             location: toLocation,
             locPlayer: toPlayer?.ID  ?? '',
             by: byPlayer.ID,
+            frontendDate,
             date: moment.now()
         });
 
         return this;
     }
 
-    async takeCard(card, player, playerCardIndex, fromLoc, fromPlayer = null) {
+    async takeCard(card, player, playerCardIndex, fromLoc, fromPlayer = null, frontendDate = 0) {
         const gamePlayer = this.validatePlayer(this.game.players, player.ID);
         gamePlayer.cards[playerCardIndex] = card.ID;
 
@@ -323,6 +330,7 @@ class GameService {
             location: fromLoc,
             locPlayer: fromPlayer?.ID  ?? '',
             by: player.ID,
+            frontendDate,
             date: moment.now()
         });
 
@@ -360,22 +368,106 @@ class GameService {
         return availableCards;
     }
 
-    validateCard(deckToValIDateFrom, cardID) {
-        if(CardService.getCardByID(cardID) === null)
-            throw new Error("Invalid card!");
+    async addPlayer(newPlayer) {
+        if (this.game.players.length >= (this.game.maxPlayers || 14)) throw new Error(`Game reached players limit`);
+        if (this.game.status.find(status => status.active).type !== 'waiting') throw new Error(`Players can only join games in the waiting state`);
+        if (this.game.players.some(player => player.ID === newPlayer.ID)) throw new Error(`${newPlayer.player.name} already in the game`);
+        if (newPlayer.player.inGame) throw new Error(`${newPlayer.player.name} can't join two games at the same time`);
 
-        const cardIndex = deckToValIDateFrom.findIndex(card => card.ID === cardID);
-        if (cardIndex === -1)
-            throw new Error("Invalid card!");
-        
-        return deckToValIDateFrom[cardIndex];
+        this.game.players.push({
+            ID: newPlayer.ID,
+            name: newPlayer.player.name                
+        })
+
+        return this;
     }
 
-    validatePlayer(players, playerToFindID) {
-        const player = players.find(player => player.ID === playerToFindID);
-        if (!player)
-            throw new Error(`Unauthorized Move!`);
+    async removePlayer(playerToRemove) {
+        if (this.game.status.find(status => status.active === true).type !== 'waiting') throw new Error(`Players can only leave games in the waiting state`);
 
+        const gamePlayerIndex = this.game.players.findIndex(player => player.ID === playerToRemove.ID);
+        if (gamePlayerIndex === -1) throw new Error(`${playerToRemove.player.name} is not in the game`);
+        this.game.players.splice(gamePlayerIndex, 1);
+
+        return this;
+    }
+
+    getGameStatus() {
+        return this.game.status.find(status => status.active) || null;
+    }
+
+    async getCard(isGameDeck, isFloor, player, index) {
+        if (isGameDeck) {
+            const activeDeck = this.getAvailableCards();
+            return activeDeck[activeDeck.length -1] || null;
+        }
+
+        if (isFloor) {
+            const currentRound = await this.getCurrentRound();
+            return currentRound.usedCards[currentRound.usedCards.length - 1] || null;
+        }
+    
+        if (player) {
+            const gamePlayer = this.game.players.find(p => p.ID === player.ID);
+            if (gamePlayer && typeof index === 'number' && index >= 0 && index < gamePlayer.cards.length) {
+                return gamePlayer.cards[index] || null;
+            }
+        }
+    
+        return null;
+    }
+
+    /**
+     * @returns the game object for the front-end. It must be sent on each move to make sure the game is synchronized
+     */
+    async getGameObject() {
+        const players = this.game.players.map((player, index) => ({
+                index: index,
+                ID: player.ID,
+                name: player.name,
+                cards: player.cards?.every(card => card != null ? 1 : 0) ?? [],
+                ready: player.ready,
+                score: player.score        
+            })
+        );
+
+        const activeStatus = this.game.status.find(status => status.active);
+        const activeDeck = this.getAvailableCards();
+
+        return {
+            code: this.game.code,
+            players: players,
+            status: activeStatus?.type ?? null,
+            deckSize: activeDeck?.length || 0,
+            usedCards: currentRound?.usedCards.length || 0,
+            currentTurn: currentRound?.currentPlayerIndex ?? null,
+            screwPlayerIndex: currentRound?.screwPlayerIndex ?? null,
+            roundNumber: currentRound?.number ?? null,
+            // roundMoves: currentRound?.moves.map(move => ({
+            //     card: move.card,
+            //     type: move.type,
+            //     location: move.location,
+            //     locPlayer: move.locPlayer,
+            //     by: move.by,
+            //     date: move.date
+            // })) ?? [],
+            winner: currentRound?.winner ?? [],
+            maxMoveTime: this.game.maxMoveTime,
+            numberOfRounds: this.game.numberOfRounds,
+            maxPlayers: this.game.maxPlayers,
+            gameWinners: this.game.winner ?? []
+        }
+    }
+
+    validateCard(deck, cardID) {
+        const card = deck.find(card => card.ID === cardID);
+        if (!card) throw new Error("Invalid card ID");
+        return card;
+    }
+    
+    validatePlayer(players, playerID) {
+        const player = players.find(player => player.ID === playerID);
+        if (!player) throw new Error("Invalid player ID");
         return player;
     }
 }

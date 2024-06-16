@@ -41,6 +41,39 @@ class PlayerService {
         return this;
     }
 
+    async createGuestPlayer(name) {
+        let ID = generateID();
+        while (true) {
+            let duplicatedID = await PlayerRepository.getPlayerData(ID);
+            if (!duplicatedID) break;
+            ID = generateID();
+        }
+
+        let playerData = { ID: ID, name: name, guest: true };
+
+        let newPlayer = await PlayerRepository.setPlayerData(playerData);
+        if (!newPlayer) return false;
+
+        this.player = newPlayer;
+
+        return this;
+    }
+
+    async upgradeToFullAccount(email, password) {
+        if (!this.player) throw new Error("Player not loaded");
+        if (!this.player.guest) throw new Error("Player is not a guest");
+
+        let duplicatedEmail = await PlayerRepository.getPlayerData(null, email);
+        if (duplicatedEmail) throw new Error("Player with that email already exists!");
+
+        this.player.email = email;
+        this.player.password = password;
+        this.player.guest = false;
+
+        await this.player.save();
+        return this;
+    }
+
     setName(newName) {
         if (!this.player) throw new Error("Player not loaded");
 
