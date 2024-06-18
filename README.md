@@ -1,5 +1,6 @@
 # Screw
  
-this is an online version of the famous egpytion cards game Screw 
+An online card game website allows many friends across the globe to play in an entertainable environment and motivative.
 
-It's Still Under Development
+# Description
+It's still under development.
