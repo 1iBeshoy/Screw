@@ -10,8 +10,26 @@ class PlayerService {
         this.player = null;
     }
 
+    async getPlayerByName(name) {
+        const player = await PlayerRepository.getPlayerData({ name: name });
+        if(!player) return false;
+
+        this.player = player;
+
+        return this;
+    }
+
+    async getPlayerByEmail(email) {
+        const player = await PlayerRepository.getPlayerData({ email: email });
+        if(!player) return false;
+
+        this.player = player;
+
+        return this;
+    }
+
     async isExists() {
-        let player = await PlayerRepository.getPlayerData(this.ID);
+        let player = await PlayerRepository.getPlayerData({ID: this.ID});
 
         if(!player) return false;
 
@@ -19,58 +37,27 @@ class PlayerService {
         return true;
     }
 
-    async createPlayer(name, email, password) {
-        let duplicatedEmail = await PlayerRepository.getPlayerData(null, email);
-        if(duplicatedEmail) throw new Error("Player with that email already exists!");
-        
+    async createPlayer(guest, name, email = null, password = null) {        
         let ID = generateID();
         while(true) {
-            let duplicatedID = await PlayerRepository.getPlayerData(ID);
+            let duplicatedID = await PlayerRepository.getPlayerData({ID});
             if(!duplicatedID) break;
 
             ID = generateID();
         }
 
-        let playerData = { ID: ID, name: name, email: email, password: password };
+        let playerData = { ID: ID, name: name };
+        if(!guest) {
+            playerData.email = email;
+            playerData.password = password;
+            playerData.guest = false;
+        }
 
        let newPlayer = await PlayerRepository.setPlayerData(playerData);
        if(!newPlayer) return false;
 
        this.player = newPlayer;
 
-        return this;
-    }
-
-    async createGuestPlayer(name) {
-        let ID = generateID();
-        while (true) {
-            let duplicatedID = await PlayerRepository.getPlayerData(ID);
-            if (!duplicatedID) break;
-            ID = generateID();
-        }
-
-        let playerData = { ID: ID, name: name, guest: true };
-
-        let newPlayer = await PlayerRepository.setPlayerData(playerData);
-        if (!newPlayer) return false;
-
-        this.player = newPlayer;
-
-        return this;
-    }
-
-    async upgradeToFullAccount(email, password) {
-        if (!this.player) throw new Error("Player not loaded");
-        if (!this.player.guest) throw new Error("Player is not a guest");
-
-        let duplicatedEmail = await PlayerRepository.getPlayerData(null, email);
-        if (duplicatedEmail) throw new Error("Player with that email already exists!");
-
-        this.player.email = email;
-        this.player.password = password;
-        this.player.guest = false;
-
-        await this.player.save();
         return this;
     }
 
@@ -82,10 +69,10 @@ class PlayerService {
         return this;
     }
 
-    checkPassword(password) {
+    async checkPassword(password) {
         if (!this.player) throw new Error("Player not loaded");
 
-        return bcrypt.compareSync(password, this.player.password);
+        return await bcrypt.compareSync(password, this.player.password);
     }
 
     setPassword(newPassword) {
@@ -144,20 +131,20 @@ class PlayerService {
         if (!this.player) throw new Error("Player not loaded");
 
         const dateFormatted = moment(newStat.date).format('DD:MM:YYYY');
-        const existingStat = this.overTimeStats.find(stat => {
+        const existingStat = this.player.overTimeStats.find(stat => {
             const statDateFormatted = moment(stat.date).format('DD:MM:YYYY');
             return statDateFormatted === dateFormatted;
         });
     
         if (existingStat) {
-            existingStat.played += stat.played;
-            existingStat.won += stat.won;
-            existingStat.winStreak = Math.max(existingStat.winStreak, stat.winStreak);
-            existingStat.bestWinStreak = Math.max(existingStat.bestWinStreak, stat.bestWinStreak);
-            existingStat.level = Math.max(existingStat.level, stat.level);
-            existingStat.exp += stat.exp;
+            existingStat.played += newStat.played || 0;
+            existingStat.won += newStat.won || 0;
+            existingStat.winStreak = Math.max(existingStat.winStreak, newStat.winStreak) || 0;
+            existingStat.bestWinStreak = Math.max(existingStat.bestWinStreak, newStat.bestWinStreak) || 0;
+            existingStat.level = Math.max(existingStat.level, newStat.level) || 0;
+            existingStat.exp += newStat.exp || 0;
         } else {
-            this.overTimeStats.push(newStat);
+            this.player.overTimeStats.push(newStat);
         }
     
         return this;
@@ -177,8 +164,8 @@ class PlayerService {
             await this.player.save();
             return true;
         } catch (error) {
-            console.error(`Error while updating '${this.player.email}' stats\nThe new stats: ${JSON.stringify(newStats)}\nThe Error`, error);
-            throw new Error("Error while updating the stats");
+            console.error(`Error while updating '${this.player.email}'\nThe Error`, error);
+            throw new Error("Error while updating the player");
         }
     }
 }

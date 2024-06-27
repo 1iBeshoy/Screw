@@ -22,13 +22,9 @@ class PlayerRepository {
         }
     }
 
-    static async getPlayerData(playerID = null, email = null) {
+    static async getPlayerData(filter) {
         try {
-            let filter = {};
-            if(playerID) filter.ID = playerID;
-            if(email) filter.email = email;
-
-            let player = await Player.findOne(filter).catch((error) => { throw new DeveloperError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 31) });;
+            let player = await Player.findOne(filter).catch((error) => { throw new DeveloperError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 27) });;
 
             if(!player) return null;
 
@@ -44,11 +40,11 @@ class PlayerRepository {
 
     static async getAllPlayers(filter = {}, projection= null, options = {}) {
         try {
-            let result = await Player.find(filter, projection, options).catch((error) => { throw new DeveloperError("error while getting players data", error, "Repositories/PlayerRepository.js", "getAllPlayers", 47) });;
+            let result = await Player.find(filter, projection, options).catch((error) => { throw new DeveloperError("error while getting players data", error, "Repositories/PlayerRepository.js", "getAllPlayers", 43) });;
             return result;
         } catch(error) {
             if(!(error instanceof DeveloperError)) {
-                new DeveloperError("unknown error", error, "Repositories/PlayerRepository.js", "getAllPlayers", 45);
+                new DeveloperError("unknown error", error, "Repositories/PlayerRepository.js", "getAllPlayers", 41);
             }
 
             return false;
