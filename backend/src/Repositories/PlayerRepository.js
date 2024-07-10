@@ -9,7 +9,7 @@ class PlayerRepository {
             if(player) {
                 await player.updateOne(playerData).catch((error) => { throw new DeveloperError("error while updating player data", error, "Repositories/PlayerRepository.js", "setPlayerData", 10) });
             } else {
-                await Player.create(playerData).catch((error) => { throw new DeveloperError("error while creating new player", error, "Repositories/PlayerRepository.js", "setPlayerData", 12) });
+                player = await Player.create(playerData).catch((error) => { throw new DeveloperError("error while creating new player", error, "Repositories/PlayerRepository.js", "setPlayerData", 12) });
             }
 
             return player;
@@ -24,7 +24,7 @@ class PlayerRepository {
 
     static async getPlayerData(filter) {
         try {
-            let player = await Player.findOne(filter).catch((error) => { throw new DeveloperError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 27) });;
+            let player = await Player.findOne({...filter}).catch((error) => { throw new DeveloperError("error while getting player data", error, "Repositories/PlayerRepository.js", "getPlayerData", 27) });;
 
             if(!player) return null;
 
